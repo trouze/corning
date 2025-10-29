@@ -1,0 +1,94 @@
+project:
+  name: Project Name
+  repository:
+    remote_url: "kairos/applications/dbt-cloud/<project_slug>"
+    gitlab_project_id: <id>
+    pull_request_url_template: "https://gitlab.toolchain.corning.com/kairos/applications/dbt-cloud/<project_slug>/-/merge_requests/new?merge_request%5Bsource_branch%5D={{source}}&merge_request%5Btarget_branch%5D={{destination}}"
+  environments:
+    - name: Prod
+      credential:
+        token_name: dbtcloud_databricks_token_dbt_svcprincipal_ucpr
+        catalog: "{{ env_var('DBT_CATALOG') }}"
+        schema: training
+      connection_id: 70403103917511
+      deployment_type: production
+      type: deployment
+      custom_branch: main-training
+      jobs:
+        - name: Production Job
+          execute_steps: 
+            - dbt compile
+          triggers:
+            github_webhook: false
+            git_provider_webhook: false
+            schedule: false
+            on_merge: false
+          description: Production deployment job
+          num_threads: 4
+          schedule_days: [0, 1, 2, 3, 4, 5, 6]
+          schedule_hours: [0]
+          schedule_type: days_of_week
+    - name: QA
+      credential:
+        token_name: dbtcloud_databricks_token_dbt_svcprincipal_ucnp
+        catalog: "{{ env_var('DBT_CATALOG') }}"
+        schema: training
+      connection_id: 70403103930283
+      deployment_type: staging
+      type: deployment
+      custom_branch: staging
+      jobs:
+        - name: Staging Job
+          execute_steps: 
+            - dbt build
+          triggers:
+            github_webhook: false
+            git_provider_webhook: false
+            schedule: false
+            on_merge: false
+          description: Staging deployment job
+          num_threads: 4
+          schedule_days: [0, 1, 2, 3, 4, 5, 6]
+          schedule_hours: [0]
+          schedule_type: days_of_week
+        - name: Staging CI Job
+          execute_steps:
+            - dbt clone --select state:modified+,config.materialized:incremental,state:old
+            - dbt build --select state:modified+
+          triggers:
+            github_webhook: false
+            git_provider_webhook: true
+            schedule: false
+            on_merge: false
+          description: Staging CI job to test changed models
+          num_threads: 4
+          deferring_environment: QA
+          env_var_overrides:
+            DBT_CATALOG: dbt_dev
+        - name: Staging Merge Job
+          execute_steps: 
+            - dbt build --select state:modified+
+          triggers:
+            github_webhook: false
+            git_provider_webhook: false
+            schedule: false
+            on_merge: true
+          description: Staging merge job to deploy changed models to QA
+          num_threads: 4
+          deferring_environment: QA
+          generate_docs: true
+    - name: Development
+      connection_id: 70403103930283
+      type: development
+      custom_branch: staging
+  environment_variables:
+    - name: DBT_CATALOG
+      environment_values:
+        - env: project
+          value: dbt_dev
+        - env: Prod
+          value: common
+        - env: QA
+          value: common_np
+        - env: Dev
+          value: dbt_dev
