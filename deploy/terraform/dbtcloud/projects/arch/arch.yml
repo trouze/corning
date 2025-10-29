@@ -1,0 +1,100 @@
+project:
+  name: Finance Training Sandbox
+  repository:
+    remote_url: "kairos/applications/dbt-cloud/dbt-Training"
+    gitlab_project_id: 8918
+    pull_request_url_template: "https://gitlab.toolchain.corning.com/kairos/applications/dbt-cloud/dbt/-/merge_requests/new?merge_request%5Bsource_branch%5D={{source}}&merge_request%5Btarget_branch%5D={{destination}}"
+  environments:
+    - name: Prod
+      credential:
+        token_name: dbtcloud_databricks_token_dbt_svcprincipal_ucpr
+        catalog: training
+        schema: default
+      connection_id: 70403103917511
+      deployment_type: production
+      type: deployment
+      custom_branch: main
+      jobs:
+        - name: Production Job
+          execute_steps: 
+            - dbt compile
+          triggers:
+            github_webhook: false
+            git_provider_webhook: false
+            schedule: false
+            on_merge: false
+          description: Production deployment job
+          num_threads: 4
+          schedule_days: [0, 1, 2, 3, 4, 5, 6]
+          schedule_hours: [0]
+          schedule_type: days_of_week
+        - name: Prod CI Job
+          execute_steps:
+            - dbt clone --select state:modified+,config.materialized:incremental,state:old
+            - dbt build --select state:modified+
+          triggers:
+            github_webhook: false
+            git_provider_webhook: true
+            schedule: false
+            on_merge: false
+          description: Prod CI job to test changed models..
+          num_threads: 4
+          deferring_environment: Prod
+    - name: QA
+      credential:
+        token_name: dbtcloud_databricks_token_dbt_svcprincipal_ucnp
+        catalog: training
+        schema: default
+      connection_id: 70403103930283
+      deployment_type: staging
+      type: deployment
+      custom_branch: staging
+      jobs:
+        - name: Staging Job
+          execute_steps: 
+            - dbt clone --full-refresh
+            - dbt build
+          triggers:
+            github_webhook: false
+            git_provider_webhook: false
+            schedule: false
+            on_merge: false
+          description: Staging deployment job
+          num_threads: 4
+          schedule_days: [0, 1, 2, 3, 4, 5, 6]
+          schedule_hours: [0]
+          schedule_type: days_of_week
+          deferring_environment: Prod
+    - name: Development
+      connection_id: 70403103930283
+      type: development
+      custom_branch: staging
+  environment_variables:
+    - name: DBT_GITLAB_USER_NAME
+      environment_values:
+        - env: project
+          value: install_kairos_dbt
+    - name: DBT_ENV_SECRET_GITLAB_DEPLOY_TOKEN
+      environment_values:
+        - env: project
+          value: secret_install_kairos_dbt_token
+    - name: DBT_ENV_SECRET_GITLAB_SD_DEPLOY_TOKEN
+      environment_values:
+        - env: project
+          value: secret_install_sd_token
+    - name: DBT_DATABRICKS_WORKSPACE
+      environment_values:
+        - env: project
+          value: ucnp
+    - name: DBT_GITLAB_SD_USER_NAME
+      environment_values:
+        - env: project
+          value: gitlab+deploy-token-437
+    - name: DBT_ENV_SECRET_GITLAB_I2_DEPLOY_TOKEN
+      environment_values:
+        - env: project
+          value: secret_install_i2_token
+    - name: DBT_GITLAB_I2_USER_NAME
+      environment_values:
+        - env: project
+          value: gitlab+deploy-token-549
